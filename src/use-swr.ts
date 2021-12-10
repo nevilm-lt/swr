@@ -520,10 +520,6 @@ export const useSWRHandler = <Data = any, Error = any>(
   // If there is no `error`, the `revalidation` promise needs to be thrown to
   // the suspense boundary.
   if (suspense && isUndefined(data) && key) {
-    // Always update fetcher and config refs even with the Suspense mode.
-    fetcherRef.current = fetcher
-    configRef.current = config
-    unmountedRef.current = false
     throw isUndefined(error) ? revalidate(WITH_DEDUPE) : error
   }
 
