@@ -17,5 +17,4 @@ const STR_UNDEFINED = 'undefined'
 // NOTE: Use function to guarantee it's re-evaluated between jsdom and node runtime for tests.
 export const hasWindow = () => typeof window != STR_UNDEFINED
 export const hasDocument = () => typeof document != STR_UNDEFINED
-export const hasRequestAnimationFrame = () =>
-  hasWindow() && typeof window['requestAnimationFrame'] != STR_UNDEFINED
+export const hasRequestAnimationFrame = () => (hasWindow() && (typeof window['requestAnimationFrame'] != STR_UNDEFINED))
