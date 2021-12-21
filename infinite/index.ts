@@ -18,74 +18,45 @@ import {
   SWRInfiniteConfiguration,
   SWRInfiniteResponse,
   SWRInfiniteHook,
-  InfiniteKeyLoader,
-  InfiniteFetcher
+  SWRInfiniteKeyLoader,
+  SWRInfiniteFetcher
 } from './types'
 
 const INFINITE_PREFIX = '$inf$'
 
-const getFirstPageKey = (getKey: InfiniteKeyLoader) => {
+const getFirstPageKey = (getKey: SWRInfiniteKeyLoader) => {
   return serialize(getKey ? getKey(0, null) : null)[0]
 }
 
-export const unstable_serialize = (getKey: InfiniteKeyLoader) => {
+export const unstable_serialize = (getKey: SWRInfiniteKeyLoader) => {
   return INFINITE_PREFIX + getFirstPageKey(getKey)
 }
 
-export const infinite = ((<Data, Error, Args extends Arguments>(
-  useSWRNext: SWRHook
-) => (
-  getKey: InfiniteKeyLoader<Args>,
-  fn: Fetcher<Data> | null,
-  config: typeof SWRConfig.default & SWRInfiniteConfiguration<Data, Error, Args>
-): SWRInfiniteResponse<Data, Error> => {
-  const rerender = useState({})[1]
-  const didMountRef = useRef<boolean>(false)
-  const dataRef = useRef<Data[]>()
+export const infinite = (<Data, Error>(useSWRNext: SWRHook) =>
+  (
+    getKey: SWRInfiniteKeyLoader,
+    fn: BareFetcher<Data> | null,
+    config: Omit<typeof SWRConfig.default, 'fetcher'> &
+      Omit<SWRInfiniteConfiguration<Data, Error>, 'fetcher'>
+  ): SWRInfiniteResponse<Data, Error> => {
+    const rerender = useState({})[1]
+    const didMountRef = useRef<boolean>(false)
+    const dataRef = useRef<Data[]>()
 
-  const {
-    cache,
-    initialSize = 1,
-    revalidateAll = false,
-    persistSize = false
-  } = config
+    const {
+      cache,
+      initialSize = 1,
+      revalidateAll = false,
+      persistSize = false,
+      revalidateFirstPage = true
+    } = config
 
-  // The serialized key of the first page.
-  let firstPageKey: string | null = null
-  try {
-    firstPageKey = getFirstPageKey(getKey)
-  } catch (err) {
-    // not ready
-  }
-
-  // We use cache to pass extra info (context) to fetcher so it can be globally
-  // shared. The key of the context data is based on the first page key.
-  let contextCacheKey: string | null = null
-
-  // Page size is also cached to share the page data between hooks with the
-  // same key.
-  let pageSizeCacheKey: string | null = null
-
-  if (firstPageKey) {
-    contextCacheKey = '$ctx$' + firstPageKey
-    pageSizeCacheKey = '$len$' + firstPageKey
-  }
-
-  const resolvePageSize = useCallback((): number => {
-    const cachedPageSize = cache.get(pageSizeCacheKey)
-    return isUndefined(cachedPageSize) ? initialSize : cachedPageSize
-
-    // `cache` isn't allowed to change during the lifecycle
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageSizeCacheKey, initialSize])
-  // keep the last page size to restore it with the persistSize option
-  const lastPageSizeRef = useRef<number>(resolvePageSize())
-
-  // When the page key changes, we reset the page size if it's not persisted
-  useIsomorphicLayoutEffect(() => {
-    if (!didMountRef.current) {
-      didMountRef.current = true
-      return
+    // The serialized key of the first page.
+    let firstPageKey: string | null = null
+    try {
+      firstPageKey = getFirstPageKey(getKey)
+    } catch (err) {
+      // not ready
     }
 
     if (firstPageKey) {
@@ -255,4 +226,10 @@ export const infinite = ((<Data, Error, Args extends Arguments>(
 }) as unknown) as Middleware
 
 export default withMiddleware(useSWR, infinite) as SWRInfiniteHook
-export { SWRInfiniteConfiguration, SWRInfiniteResponse, InfiniteFetcher }
+export {
+  SWRInfiniteConfiguration,
+  SWRInfiniteResponse,
+  SWRInfiniteHook,
+  SWRInfiniteKeyLoader,
+  SWRInfiniteFetcher
+}
