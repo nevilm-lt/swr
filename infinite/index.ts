@@ -71,13 +71,66 @@ export const infinite = (<Data, Error>(useSWRNext: SWRHook) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstPageKey])
 
-  // Actual SWR hook to load all pages in one fetcher.
-  const swr = useSWRNext<Data[], Error>(
-    firstPageKey ? INFINITE_PREFIX + firstPageKey : null,
-    async () => {
-      // get the revalidate context
-      const [forceRevalidateAll, originalData] =
-        cache.get(contextCacheKey) || []
+      if (firstPageKey) {
+        // If the key has been changed, we keep the current page size if persistSize is enabled
+        cache.set(
+          pageSizeCacheKey,
+          persistSize ? lastPageSizeRef.current : initialSize
+        )
+      }
+
+      // `initialSize` isn't allowed to change during the lifecycle
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [firstPageKey])
+
+    // Actual SWR hook to load all pages in one fetcher.
+    const swr = useSWRNext<Data[], Error>(
+      firstPageKey ? INFINITE_PREFIX + firstPageKey : null,
+      async () => {
+        // get the revalidate context
+        const [forceRevalidateAll, originalData] =
+          cache.get(contextCacheKey) || []
+
+        // return an array of page data
+        const data: Data[] = []
+
+        const pageSize = resolvePageSize()
+
+        let previousPageData = null
+        for (let i = 0; i < pageSize; ++i) {
+          const [pageKey, pageArgs] = serialize(getKey(i, previousPageData))
+
+          if (!pageKey) {
+            // `pageKey` is falsy, stop fetching new pages.
+            break
+          }
+
+          // Get the cached page data.
+          let pageData = cache.get(pageKey)
+
+          // should fetch (or revalidate) if:
+          // - `revalidateAll` is enabled
+          // - `mutate()` called
+          // - the cache is missing
+          // - it's the first page and it's not the initial render
+          // - cache for that page has changed
+          const shouldFetchPage =
+            revalidateAll ||
+            forceRevalidateAll ||
+            isUndefined(pageData) ||
+            (revalidateFirstPage && !i && !isUndefined(dataRef.current)) ||
+            (originalData &&
+              !isUndefined(originalData[i]) &&
+              !config.compare(originalData[i], pageData))
+
+          if (fn && shouldFetchPage) {
+            pageData = await fn(...pageArgs)
+            cache.set(pageKey, pageData)
+          }
+
+          data.push(pageData)
+          previousPageData = pageData
+        }
 
       // return an array of page data
       const data: Data[] = []
@@ -86,9 +139,7 @@ export const infinite = (<Data, Error>(useSWRNext: SWRHook) =>
 
       let previousPageData = null
       for (let i = 0; i < pageSize; ++i) {
-        const [pageKey, pageArgs] = serialize(
-          getKey ? getKey(i, previousPageData) : null
-        )
+        const [pageKey] = serialize(getKey(i, previousPageData))
 
         if (!pageKey) {
           // `pageKey` is falsy, stop fetching new pages.

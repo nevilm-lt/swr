@@ -323,6 +323,18 @@ describe('useSWR - local mutation', () => {
     ).rejects.toBeInstanceOf(Error)
   })
 
+  it('globalMutate should return undefined if the key is serialized to "" ', async () => {
+    // returns the data if promise resolved
+    expect(globalMutate(null, Promise.resolve('data'))).resolves.toBe(undefined)
+
+    // throw the error if promise rejected
+    expect(
+      globalMutate(() => {
+        throw new Error('error')
+      }, Promise.resolve('data'))
+    ).resolves.toBe(undefined)
+  })
+
   it('should get bound mutate from useSWR', async () => {
     const key = createKey()
     function Page() {
@@ -832,5 +844,142 @@ describe('useSWR - local mutation', () => {
     await act(() => sleep(20))
     screen.getByText('data:data')
     screen.getByText('isValidating:false')
+  })
+
+  it('should be able to mutate data to undefined', async () => {
+    const key = createKey()
+    function Page() {
+      const { data, mutate } = useSWR(key, () => 'foo')
+      return (
+        <>
+          <div>data: {String(data)}</div>
+          <button onClick={() => mutate(undefined, false)}>mutate</button>
+        </>
+      )
+    }
+
+    renderWithConfig(<Page />)
+    await screen.findByText('data: foo')
+
+    fireEvent.click(screen.getByText('mutate'))
+    await screen.findByText('data: undefined')
+  })
+
+  it('should be able to mutate data to undefined asynchronously', async () => {
+    const key = createKey()
+    function Page() {
+      const { data, mutate } = useSWR(key, () => 'foo')
+      return (
+        <>
+          <div>data: {String(data)}</div>
+          <button
+            onClick={() =>
+              mutate(
+                () => new Promise(res => setTimeout(() => res(undefined), 10)),
+                false
+              )
+            }
+          >
+            mutate
+          </button>
+        </>
+      )
+    }
+
+    renderWithConfig(<Page />)
+    await screen.findByText('data: foo')
+
+    fireEvent.click(screen.getByText('mutate'))
+    await screen.findByText('data: undefined')
+  })
+
+  // https://github.com/vercel/swr/issues/482
+  it('should be able to deduplicate multiple mutate calls', async () => {
+    const key = createKey()
+    const loggedData = []
+
+    function Page() {
+      const { data, mutate } = useSWR(key, () => 'foo')
+
+      useEffect(() => {
+        async function startMutation() {
+          await sleep(10)
+          mutate('sync1', false)
+          mutate(createResponse('async1', { delay: 50 }), false)
+          await sleep(10)
+          mutate('sync2', false)
+          mutate(createResponse('async2', { delay: 50 }), false)
+          await sleep(10)
+          mutate('sync3', false)
+          mutate(createResponse('async3', { delay: 50 }), false)
+        }
+
+        startMutation()
+      }, [mutate])
+
+      loggedData.push(data)
+      return null
+    }
+
+    renderWithConfig(<Page />)
+    await act(() => sleep(200))
+
+    // Only "async3" is left and others were deduped.
+    expect(loggedData).toEqual([
+      undefined,
+      'foo',
+      'sync1',
+      'sync2',
+      'sync3',
+      'async3'
+    ])
+  })
+
+  it('should ignore in flight mutation error when calling another async mutate', async () => {
+    const key = createKey()
+    const errorMutate = () =>
+      new Promise<string>((_, reject) => {
+        setTimeout(() => reject('error'), 200)
+      })
+
+    const successMutate = () =>
+      new Promise<string>(resolve => {
+        setTimeout(() => resolve('success'), 100)
+      })
+    function Page() {
+      const { data, mutate: boundMutate } = useSWR(key, () =>
+        createResponse('data', { delay: 100 })
+      )
+      return (
+        <div>
+          <div>{data}</div>
+          <button
+            onClick={() => {
+              boundMutate(successMutate, false)
+            }}
+          >
+            success-mutate
+          </button>
+          <button
+            onClick={() => {
+              boundMutate(errorMutate, false).catch(() => {})
+            }}
+          >
+            error-mutate
+          </button>
+        </div>
+      )
+    }
+    renderWithConfig(<Page />)
+    await screen.findByText('data')
+
+    fireEvent.click(screen.getByText('error-mutate'))
+    await sleep(50)
+
+    fireEvent.click(screen.getByText('success-mutate'))
+    await screen.findByText('success')
+
+    await sleep(300)
+    await screen.findByText('success')
   })
 })
