@@ -110,7 +110,7 @@ export const useSWRHandler = <Data = any, Error = any>(
   // Resolve the current validating state.
   const resolveValidating = () => {
     if (!key || !fetcher) return false
-    if (info.isValidating) return true
+    if (cache.get(keyValidating)) return true
 
     // If it's not mounted yet and it should revalidate on mount, revalidate.
     return isInitialMount && shouldRevalidate()
@@ -204,8 +204,9 @@ export const useSWRHandler = <Data = any, Error = any>(
             }, config.loadingTimeout)
           }
 
-          // Start the request and save the timestamp.
-          FETCH[key] = [currentFetcher(...fnArgs), getTimestamp()]
+          // Start the request and keep the timestamp.
+          CONCURRENT_PROMISES_TS[key] = getTimestamp()
+          CONCURRENT_PROMISES[key] = currentFetcher(...fnArgs)
         }
 
         // Wait until the ongoing request is done. Deduplication is also
