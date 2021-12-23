@@ -9,11 +9,15 @@ module.exports = {
     '^swr/infinite$': '<rootDir>/infinite/index.ts',
     '^swr/immutable$': '<rootDir>/immutable/index.ts'
   },
-  globals: {
-    'ts-jest': {
-      tsconfig: 'test/tsconfig.json',
-      diagnostics: process.env.CI
-    }
+  transform: {
+    '^.+\\.(t|j)sx?$': [
+      '@swc-node/jest',
+      {
+        jsc: {
+          minify: false
+        }
+      }
+    ]
   },
   coveragePathIgnorePatterns: ['/node_modules/', '/dist/', '/test/'],
   coverageProvider: 'v8',
