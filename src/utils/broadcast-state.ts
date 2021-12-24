@@ -9,7 +9,7 @@ export const broadcastState: Broadcaster = (
   error,
   isValidating,
   revalidate,
-  broadcast = true
+  populateCache = true
 ) => {
   const [EVENT_REVALIDATORS, STATE_UPDATERS, , FETCH] = SWRGlobalState.get(
     cache
@@ -18,7 +18,7 @@ export const broadcastState: Broadcaster = (
   const updaters = STATE_UPDATERS[key]
 
   // Cache was populated, update states of all hooks.
-  if (broadcast && updaters) {
+  if (populateCache && updaters) {
     for (let i = 0; i < updaters.length; ++i) {
       updaters[i](data, error, isValidating)
     }

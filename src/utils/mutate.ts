@@ -11,7 +11,7 @@ export const internalMutate = async <Data>(
     Cache,
     Key,
     undefined | Data | Promise<Data | undefined> | MutatorCallback<Data>,
-    undefined | boolean | MutatorOptions<Data>
+    undefined | boolean | MutatorOptions
   ]
 ) => {
   const [cache, _key, _data, _opts] = args
@@ -22,12 +22,8 @@ export const internalMutate = async <Data>(
     typeof _opts === 'boolean' ? { revalidate: _opts } : _opts || {}
 
   // Fallback to `true` if it's not explicitly set to `false`
-  let populateCache = isUndefined(options.populateCache)
-    ? true
-    : options.populateCache
   const revalidate = options.revalidate !== false
-  const rollbackOnError = options.rollbackOnError !== false
-  const customOptimisticData = options.optimisticData
+  const populateCache = options.populateCache !== false
 
   // Serilaize key
   const [key, , keyInfo] = serialize(_key)
@@ -43,9 +39,8 @@ export const internalMutate = async <Data>(
       key,
       cache.get(key),
       UNDEFINED,
-      UNDEFINED,
       revalidate,
-      true
+      populateCache
     )
   }
 
@@ -100,20 +95,13 @@ export const internalMutate = async <Data>(
     }
   }
 
-  // If we should write back the cache after request.
   if (populateCache) {
     if (!error) {
-      // Transform the result into data.
-      if (isFunction(populateCache)) {
-        data = populateCache(data, rollbackData)
-      }
-
       // Only update cached data if there's no error. Data can be `undefined` here.
       cache.set(key, data)
     }
-
     // Always update or reset the error.
-    cache.set(keyInfo, mergeObjects(cache.get(keyInfo), { error }))
+    cache.set(keyErr, error)
   }
 
   // Reset the timestamp to mark the mutation has ended.
@@ -127,7 +115,7 @@ export const internalMutate = async <Data>(
     error,
     UNDEFINED,
     revalidate,
-    !!populateCache
+    populateCache
   )
 
   // Throw error or return data
