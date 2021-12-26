@@ -77,8 +77,6 @@ export const useSWRHandler = <Data = any, Error = any>(
   const configRef = useRef(config)
   const getConfig = () => configRef.current
   const isActive = () => getConfig().isVisible() && getConfig().isOnline()
-  const patchFetchInfo = (info: { isValidating?: boolean; error?: any }) =>
-    cache.set(keyInfo, mergeObjects(cache.get(keyInfo), info))
 
   // Get the current state that SWR should return.
   const cached = cache.get(key)
