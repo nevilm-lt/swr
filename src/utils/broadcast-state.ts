@@ -11,9 +11,8 @@ export const broadcastState: Broadcaster = (
   revalidate,
   populateCache = true
 ) => {
-  const [EVENT_REVALIDATORS, STATE_UPDATERS, , FETCH] = SWRGlobalState.get(
-    cache
-  ) as GlobalState
+  const [EVENT_REVALIDATORS, STATE_UPDATERS, , , CONCURRENT_REQUESTS] =
+    SWRGlobalState.get(cache) as GlobalState
   const revalidators = EVENT_REVALIDATORS[key]
   const updaters = STATE_UPDATERS[key]
 
@@ -28,7 +27,7 @@ export const broadcastState: Broadcaster = (
   if (revalidate) {
     // Invalidate the key by deleting the concurrent request markers so new
     // requests will not be deduped.
-    delete FETCH[key]
+    delete CONCURRENT_REQUESTS[key]
 
     if (revalidators && revalidators[0]) {
       return revalidators[0](revalidateEvents.MUTATE_EVENT).then(() =>

@@ -49,11 +49,16 @@ export const useSWRHandler = <Data = any, Error = any>(
     refreshWhenOffline
   } = config
 
-  const [EVENT_REVALIDATORS, STATE_UPDATERS, MUTATION, FETCH] =
-    SWRGlobalState.get(cache) as GlobalState
+  const [
+    EVENT_REVALIDATORS,
+    STATE_UPDATERS,
+    MUTATION_TS,
+    MUTATION_END_TS,
+    CONCURRENT_REQUESTS
+  ] = SWRGlobalState.get(cache) as GlobalState
 
-  // `key` is the identifier of the SWR `data` state, `keyInfo` holds extra
-  // states such as `error` and `isValidating` inside,
+  // `key` is the identifier of the SWR `data` state, `keyErr` and
+  // `keyValidating` are identifiers of `error` and `isValidating`,
   // all of them are derived from `_key`.
   // `fnArgs` is an array of arguments parsed from the key, which will be passed
   // to the fetcher.
@@ -148,7 +153,7 @@ export const useSWRHandler = <Data = any, Error = any>(
 
       // If there is no ongoing concurrent request, or `dedupe` is not set, a
       // new request should be initiated.
-      const shouldStartNewRequest = !FETCH[key] || !opts.dedupe
+      const shouldStartNewRequest = !CONCURRENT_REQUESTS[key] || !opts.dedupe
 
       // Do unmount check for calls:
       // If key has changed during the revalidation, or the component has been
@@ -161,9 +166,9 @@ export const useSWRHandler = <Data = any, Error = any>(
 
       const cleanupState = () => {
         // Check if it's still the same request before deleting.
-        const requestInfo = FETCH[key]
+        const requestInfo = CONCURRENT_REQUESTS[key]
         if (requestInfo && requestInfo[1] === startAt) {
-          delete FETCH[key]
+          delete CONCURRENT_REQUESTS[key]
         }
       }
 
@@ -204,14 +209,13 @@ export const useSWRHandler = <Data = any, Error = any>(
             }, config.loadingTimeout)
           }
 
-          // Start the request and keep the timestamp.
-          CONCURRENT_PROMISES_TS[key] = getTimestamp()
-          CONCURRENT_PROMISES[key] = currentFetcher(...fnArgs)
+          // Start the request and save the timestamp.
+          CONCURRENT_REQUESTS[key] = [currentFetcher(...fnArgs), getTimestamp()]
         }
 
         // Wait until the ongoing request is done. Deduplication is also
         // considered here.
-        ;[newData, startAt] = FETCH[key]
+        ;[newData, startAt] = CONCURRENT_REQUESTS[key]
         newData = await newData
 
         if (shouldStartNewRequest) {
@@ -226,7 +230,10 @@ export const useSWRHandler = <Data = any, Error = any>(
         //        req2---------------->res2
         // the request that fired later will always be kept.
         // The timestamp maybe be `undefined` or a number
-        if (!FETCH[key] || FETCH[key][1] !== startAt) {
+        if (
+          !CONCURRENT_REQUESTS[key] ||
+          CONCURRENT_REQUESTS[key][1] !== startAt
+        ) {
           if (shouldStartNewRequest) {
             if (isCurrentKeyMounted()) {
               getConfig().onDiscarded(key)
