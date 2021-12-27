@@ -1,5 +1,5 @@
 import { serialize } from './serialize'
-import { isFunction, isUndefined, mergeObjects, UNDEFINED } from './helper'
+import { isFunction, isUndefined, UNDEFINED } from './helper'
 import { SWRGlobalState, GlobalState } from './global-state'
 import { broadcastState } from './broadcast-state'
 import { getTimestamp } from './timestamp'
@@ -11,7 +11,7 @@ export const internalMutate = async <Data>(
     Cache,
     Key,
     undefined | Data | Promise<Data | undefined> | MutatorCallback<Data>,
-    undefined | boolean | MutatorOptions
+    undefined | boolean | MutatorOptions<Data>
   ]
 ) => {
   const [cache, _key, _data, _opts] = args
@@ -22,8 +22,10 @@ export const internalMutate = async <Data>(
     typeof _opts === 'boolean' ? { revalidate: _opts } : _opts || {}
 
   // Fallback to `true` if it's not explicitly set to `false`
+  let populateCache = options.populateCache !== false
   const revalidate = options.revalidate !== false
-  const populateCache = options.populateCache !== false
+  const rollbackOnError = options.rollbackOnError !== false
+  const optimisticData = options.optimisticData
 
   // Serilaize key
   const [key, , keyInfo] = serialize(_key)
@@ -48,16 +50,13 @@ export const internalMutate = async <Data>(
   let error: unknown
 
   // Update global timestamps.
-  const beforeMutationTs = getTimestamp()
-  MUTATION[key] = [beforeMutationTs, 0]
-  const hasCustomOptimisticData = !isUndefined(customOptimisticData)
+  const beforeMutationTs = (MUTATION_TS[key] = getTimestamp())
+  MUTATION_END_TS[key] = 0
+  const hasOptimisticData = !isUndefined(optimisticData)
   const rollbackData = cache.get(key)
 
   // Do optimistic data update.
-  if (hasCustomOptimisticData) {
-    const optimisticData = isFunction(customOptimisticData)
-      ? customOptimisticData(rollbackData)
-      : customOptimisticData
+  if (hasOptimisticData) {
     cache.set(key, optimisticData)
     broadcastState(cache, key, optimisticData)
   }
@@ -86,9 +85,8 @@ export const internalMutate = async <Data>(
     if (beforeMutationTs !== MUTATION[key][0]) {
       if (error) throw error
       return data
-    } else if (error && hasCustomOptimisticData && rollbackOnError) {
-      // Rollback. Always populate the cache in this case but without
-      // transforming the data.
+    } else if (error && hasOptimisticData && rollbackOnError) {
+      // Rollback. Always populate the cache in this case.
       populateCache = true
       data = rollbackData
       cache.set(key, rollbackData)
