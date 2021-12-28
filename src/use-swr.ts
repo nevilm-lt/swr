@@ -49,13 +49,8 @@ export const useSWRHandler = <Data = any, Error = any>(
     refreshWhenOffline
   } = config
 
-  const [
-    EVENT_REVALIDATORS,
-    STATE_UPDATERS,
-    MUTATION_TS,
-    MUTATION_END_TS,
-    CONCURRENT_REQUESTS
-  ] = SWRGlobalState.get(cache) as GlobalState
+  const [EVENT_REVALIDATORS, STATE_UPDATERS, MUTATION, CONCURRENT_REQUESTS] =
+    SWRGlobalState.get(cache) as GlobalState
 
   // `key` is the identifier of the SWR `data` state, `keyErr` and
   // `keyValidating` are identifiers of `error` and `isValidating`,

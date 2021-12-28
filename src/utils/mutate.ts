@@ -50,8 +50,8 @@ export const internalMutate = async <Data>(
   let error: unknown
 
   // Update global timestamps.
-  const beforeMutationTs = (MUTATION_TS[key] = getTimestamp())
-  MUTATION_END_TS[key] = 0
+  const beforeMutationTs = getTimestamp()
+  MUTATION[key] = [beforeMutationTs, 0]
   const hasOptimisticData = !isUndefined(optimisticData)
   const rollbackData = cache.get(key)
 
