@@ -52,8 +52,8 @@ export const useSWRHandler = <Data = any, Error = any>(
   const [EVENT_REVALIDATORS, STATE_UPDATERS, MUTATION, FETCH] =
     SWRGlobalState.get(cache) as GlobalState
 
-  // `key` is the identifier of the SWR `data` state, `keyErr` and
-  // `keyValidating` are identifiers of `error` and `isValidating`,
+  // `key` is the identifier of the SWR `data` state, `keyInfo` holds extra
+  // states such as `error` and `isValidating` inside,
   // all of them are derived from `_key`.
   // `fnArgs` is an array of arguments parsed from the key, which will be passed
   // to the fetcher.
@@ -72,6 +72,8 @@ export const useSWRHandler = <Data = any, Error = any>(
   const configRef = useRef(config)
   const getConfig = () => configRef.current
   const isActive = () => getConfig().isVisible() && getConfig().isOnline()
+  const patchFetchInfo = (info: { isValidating?: boolean; error?: any }) =>
+    cache.set(keyInfo, mergeObjects(cache.get(keyInfo), info))
 
   // Get the current state that SWR should return.
   const cached = cache.get(key)
@@ -81,8 +83,6 @@ export const useSWRHandler = <Data = any, Error = any>(
   const data = isUndefined(cached) ? fallback : cached
   const info = cache.get(keyInfo) || {}
   const error = info.error
-
-  const isInitialMount = !initialMountedRef.current
 
   // - Suspense mode and there's stale data for the initial render.
   // - Not suspense mode and there is no fallback data and `revalidateIfStale` is enabled.
@@ -108,7 +108,7 @@ export const useSWRHandler = <Data = any, Error = any>(
   // Resolve the current validating state.
   const resolveValidating = () => {
     if (!key || !fetcher) return false
-    if (cache.get(keyValidating)) return true
+    if (info.isValidating) return true
 
     // If it's not mounted yet and it should revalidate on mount, revalidate.
     return isInitialMount && shouldRevalidate()
