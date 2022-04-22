@@ -42,7 +42,7 @@ export interface PublicConfiguration<
   revalidateOnReconnect: boolean
   revalidateOnMount?: boolean
   revalidateIfStale: boolean
-  shouldRetryOnError: boolean
+  shouldRetryOnError: boolean | ((err: Error) => boolean)
   suspense?: boolean
   fallbackData?: Data
   fetcher?: Fn
@@ -119,7 +119,7 @@ export interface SWRHook {
   ): SWRResponse<Data, Error>
 }
 
-// Middlewares guarantee that a SWRHook receives a key, fetcher, and config as the argument
+// Middleware guarantee that a SWRHook receives a key, fetcher, and config as the argument
 export type Middleware = (
   useSWRNext: SWRHook
 ) => <Data = any, Error = any>(
@@ -139,8 +139,15 @@ export type Arguments =
 export type Key = Arguments | (() => Arguments)
 
 export type MutatorCallback<Data = any> = (
-  currentValue?: Data
+  currentData?: Data
 ) => Promise<undefined | Data> | undefined | Data
+
+export type MutatorOptions<Data = any> = {
+  revalidate?: boolean
+  populateCache?: boolean | ((result: any, currentData: Data) => Data)
+  optimisticData?: Data | ((currentData?: Data) => Data)
+  rollbackOnError?: boolean
+}
 
 export type Broadcaster<Data = any, Error = any> = (
   cache: Cache<Data>,
@@ -148,7 +155,8 @@ export type Broadcaster<Data = any, Error = any> = (
   data: Data,
   error?: Error,
   isValidating?: boolean,
-  shouldRevalidate?: boolean
+  revalidate?: boolean,
+  populateCache?: boolean
 ) => Promise<Data>
 
 export type State<Data, Error> = {
@@ -157,31 +165,45 @@ export type State<Data, Error> = {
   isValidating?: boolean
 }
 
-export type Mutator<Data = any> = (
+export type MutatorFn<Data = any> = (
   cache: Cache,
   key: Key,
   data?: Data | Promise<Data> | MutatorCallback<Data>,
-  shouldRevalidate?: boolean
+  opts?: boolean | MutatorOptions<Data>
 ) => Promise<Data | undefined>
+
+export type MutatorWrapper<Fn> = Fn extends (
+  ...args: [...infer Parameters]
+) => infer Result
+  ? Parameters[3] extends boolean
+    ? Result
+    : Parameters[3] extends Required<Pick<MutatorOptions, 'populateCache'>>
+    ? Parameters[3]['populateCache'] extends false
+      ? never
+      : Result
+    : Result
+  : never
+
+export type Mutator<Data = any> = MutatorWrapper<MutatorFn<Data>>
 
 export interface ScopedMutator<Data = any> {
   /** This is used for bound mutator */
   (
     key: Key,
     data?: Data | Promise<Data> | MutatorCallback<Data>,
-    shouldRevalidate?: boolean
+    opts?: boolean | MutatorOptions<Data>
   ): Promise<Data | undefined>
   /** This is used for global mutator */
   <T = any>(
     key: Key,
     data?: T | Promise<T> | MutatorCallback<T>,
-    shouldRevalidate?: boolean
+    opts?: boolean | MutatorOptions<Data>
   ): Promise<T | undefined>
 }
 
 export type KeyedMutator<Data> = (
   data?: Data | Promise<Data> | MutatorCallback<Data>,
-  shouldRevalidate?: boolean
+  opts?: boolean | MutatorOptions<Data>
 ) => Promise<Data | undefined>
 
 // Public types
